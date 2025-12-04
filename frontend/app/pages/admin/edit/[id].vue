@@ -1,82 +1,48 @@
 <template>
   <div class="page">
-    <div class="article-layout" v-if="post">
-      <div class="article-main">
-        <NuxtLink to="/" class="back-link">← 返回首页</NuxtLink>
+    <div class="container">
+      <NuxtLink to="/admin/list" class="back-link">← 返回文章管理</NuxtLink>
+      <h2>编辑文章（ID：{{ id }}）</h2>
 
-        <p class="article-tagline">博客 · 文章详情</p>
-        <h1 class="article-title">{{ post.title }}</h1>
+      <p v-if="loading" class="hint">正在加载文章数据...</p>
+      <p v-if="error" class="error">加载失败：{{ error }}</p>
 
-        <div class="article-meta">
-          <span>👤 {{ post.author || "匿名" }}</span>
-          <span>·</span>
-          <span>📅 {{ formatDate(post.created_at) }}</span>
-          <span>·</span>
-          <span>👁️ {{ post.view_count }} 次浏览</span>
-        </div>
+      <form v-if="!loading" class="form" @submit.prevent="handleSave">
+        <label class="field">
+          <span>标题</span>
+          <input v-model="form.title" type="text" required />
+        </label>
 
-        <div v-if="tags && tags.length" class="article-tags">
-          <button
-            v-for="tag in tags"
-            :key="tag"
-            class="tag-chip"
-            @click="goTag(tag)"
-          >
-            # {{ tag }}
+        <label class="field">
+          <span>摘要</span>
+          <textarea v-model="form.summary" rows="2" />
+        </label>
+
+        <label class="field">
+          <span>标签（逗号分隔）</span>
+          <input v-model="form.tags" type="text" />
+        </label>
+
+        <label class="field">
+          <span>状态</span>
+          <select v-model="form.status">
+            <option value="published">发布</option>
+            <option value="draft">草稿</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>正文</span>
+          <textarea v-model="form.content" rows="14" />
+        </label>
+
+        <div class="actions">
+          <button type="button" class="btn" @click="goBack">取消返回</button>
+          <button type="submit" class="btn-primary" :disabled="saving">
+            {{ saving ? "保存中..." : "保存修改" }}
           </button>
         </div>
-
-        <div class="article-content">
-          <p v-if="post.summary" class="article-summary">
-            {{ post.summary }}
-          </p>
-          <div class="article-body">
-            <!-- 简单按换行拆段落 -->
-            <p
-              v-for="(line, idx) in splitLines(post.content)"
-              :key="idx"
-              class="article-paragraph"
-            >
-              {{ line }}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <aside class="article-side">
-        <div class="side-card">
-          <h3>文章信息</h3>
-          <ul>
-            <li>
-              <span>状态：</span>
-              <span>{{ post.status === "published" ? "已发布" : "草稿" }}</span>
-            </li>
-            <li>
-              <span>创建时间：</span>
-              <span>{{ formatDateTime(post.created_at) }}</span>
-            </li>
-            <li>
-              <span>最后更新：</span>
-              <span>{{
-                formatDateTime(post.updated_at || post.created_at)
-              }}</span>
-            </li>
-          </ul>
-        </div>
-
-        <div class="side-card side-tip">
-          <h3>提示</h3>
-          <p>
-            本页面由 Nuxt 3 在服务端预渲染生成，首屏加载更快，对 SEO 更友好。
-          </p>
-        </div>
-      </aside>
-    </div>
-
-    <div v-else class="loading-area">
-      <p v-if="pending">正在加载文章...</p>
-      <p v-else>未找到该文章，可能已经被删除。</p>
-      <NuxtLink to="/" class="back-link">返回首页</NuxtLink>
+      </form>
     </div>
   </div>
 </template>
@@ -88,66 +54,55 @@ const router = useRouter();
 
 const id = computed(() => route.params.id);
 
-const { data, pending } = await useAsyncData(
-  () => `post-detail-${id.value}`,
-  async () => {
-    try {
-      const resp = await $fetch(`${config.public.apiBase}/posts/${id.value}`);
-      return resp;
-    } catch (err) {
-      console.error("获取文章详情失败：", err);
-      return null;
-    }
-  }
-);
-
-const post = computed(() => data.value || null);
-
-const tags = computed(() => {
-  if (!post.value?.tags) return [];
-  return post.value.tags
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+const form = reactive({
+  title: "",
+  summary: "",
+  tags: "",
+  content: "",
+  status: "published",
 });
 
-const splitLines = (content) => {
-  if (!content) return [];
-  return String(content)
-    .split(/\r?\n/)
-    .map((s) => s.trim())
-    .filter(Boolean);
+const loading = ref(true);
+const saving = ref(false);
+const error = ref("");
+
+// 1. 进入页面时拉取文章详情，填充表单
+try {
+  const post = await $fetch(`${config.public.apiBase}/posts/${id.value}`);
+  form.title = post.title || "";
+  form.summary = post.summary || "";
+  form.tags = post.tags || "";
+  form.content = post.content || "";
+  form.status = post.status || "published";
+} catch (e) {
+  console.error("加载文章失败", e);
+  error.value = e?.data?.message || e?.message || "未知错误";
+} finally {
+  loading.value = false;
+}
+
+// 2. 保存修改（注意接口要和后端一致）
+const handleSave = async () => {
+  saving.value = true;
+  error.value = "";
+  try {
+    await $fetch(`${config.public.apiBase}/posts/${id.value}`, {
+      method: "PUT", // 如果后端用 PATCH/POST，就改成对应的
+      body: form,
+    });
+    alert("保存成功！");
+    router.push("/admin/list"); // 或者 "/admin"，看你列表路由
+  } catch (e) {
+    console.error("保存失败", e);
+    error.value = e?.data?.message || e?.message || "未知错误";
+    alert("保存失败，请查看控制台/接口返回");
+  } finally {
+    saving.value = false;
+  }
 };
 
-const formatDate = (value) => {
-  if (!value) return "";
-  const d = new Date(value);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
-
-const formatDateTime = (value) => {
-  if (!value) return "";
-  const d = new Date(value);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  const h = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${y}-${m}-${day} ${h}:${mm}`;
-};
-
-const goTag = (tag) => {
-  router.push({
-    path: "/",
-    query: {
-      page: 1,
-      tag,
-      sort: "time",
-    },
-  });
+const goBack = () => {
+  router.push("/admin/list");
 };
 </script>
 
@@ -156,162 +111,85 @@ const goTag = (tag) => {
   max-width: 1080px;
   margin: 0 auto;
 }
-
-.article-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 2.3fr) minmax(0, 0.9fr);
-  gap: 18px;
-}
-
-.article-main {
+.container {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 24px 32px;
   background: #ffffff;
-  border-radius: 18px;
-  padding: 18px 22px;
-  border: 1px solid rgba(209, 213, 219, 0.9);
-  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
-
 .back-link {
   display: inline-block;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
   font-size: 13px;
   color: #2563eb;
   text-decoration: none;
 }
-
 .back-link:hover {
   text-decoration: underline;
 }
-
-.article-tagline {
-  font-size: 12px;
-  color: #0369a1;
-  background: #e0f2fe;
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  margin-bottom: 6px;
+h2 {
+  margin: 0 0 16px;
 }
-
-.article-title {
-  font-size: 26px;
-  margin: 4px 0 8px;
-}
-
-.article-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 13px;
-  color: #6b7280;
-}
-
-.article-tags {
-  margin-top: 10px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* 标签 chip */
-.tag-chip {
-  border-radius: 999px;
-  padding: 3px 10px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
-  font-size: 12px;
-  color: #4b5563;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.tag-chip:hover {
-  background: #eff6ff;
-  border-color: #bfdbfe;
-}
-
-.article-content {
-  margin-top: 14px;
-}
-
-.article-summary {
-  padding: 10px 12px;
-  border-left: 3px solid #38bdf8;
-  background: #f0f9ff;
-  color: #0f172a;
-  font-size: 14px;
-  border-radius: 8px;
-}
-
-.article-body {
-  margin-top: 16px;
-  font-size: 15px;
-  line-height: 1.8;
-  color: #111827;
-}
-
-.article-paragraph {
-  margin: 0 0 12px;
-}
-
-/* 侧边栏 */
-.article-side {
+.form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
-
-.side-card {
-  background: #ffffff;
-  border-radius: 14px;
-  padding: 14px 16px;
-  border: 1px solid rgba(209, 213, 219, 0.9);
-  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
-  font-size: 13px;
-}
-
-.side-card h3 {
-  margin: 0 0 8px;
-  font-size: 14px;
-}
-
-.side-card ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.side-card li {
+.field {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 6px;
-  margin-bottom: 4px;
 }
-
-.side-card li span:first-child {
-  color: #6b7280;
-}
-
-.side-tip p {
-  margin: 4px 0 0;
+.field span {
+  font-size: 14px;
   color: #4b5563;
 }
-
-.loading-area {
-  max-width: 600px;
-  margin: 40px auto;
-  text-align: center;
+input,
+textarea,
+select {
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+textarea {
+  resize: vertical;
+}
+.actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn-primary {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn-primary[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.hint {
+  font-size: 13px;
   color: #6b7280;
 }
-
-/* 响应式 */
-@media (max-width: 768px) {
-  .article-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .article-main {
-    padding: 14px 14px;
-  }
+.error {
+  font-size: 13px;
+  color: #b91c1c;
 }
 </style>
