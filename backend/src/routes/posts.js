@@ -76,7 +76,7 @@ async function updateArticleTags(articleId, tagsString) {
 /**
  * 简单缓存失效策略：
  * - 只要有写操作（新增 / 修改 / 删除），就清空 Redis 所有缓存
- *   这样可以保证数据与缓存一致（课程项目足够用了）
+ *   这样可以保证数据与缓存一致
  */
 async function flushAllCache() {
   try {

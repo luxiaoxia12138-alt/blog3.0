@@ -29,7 +29,7 @@ function callVolcengineChat({ apiUrl, apiKey, model, prompt }) {
         headers: {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(body),
-          // 这里的鉴权方式要按你火山引擎控制台的要求来
+
           Authorization: `Bearer ${apiKey}`, // 使用 Bearer Token 认证
         },
       };
@@ -66,7 +66,7 @@ function callVolcengineChat({ apiUrl, apiKey, model, prompt }) {
 }
 
 /**
- * 根据标题/关键词生成文章正文和摘要（通过火山引擎大模型）
+ * 根据标题/关键词生成文章正文和摘要
  * @param {Object} opts
  * @param {string} opts.title
  * @param {string} opts.keywords
@@ -74,7 +74,7 @@ function callVolcengineChat({ apiUrl, apiKey, model, prompt }) {
 async function generateArticle({ title, keywords }) {
   const apiKey = process.env.VOLCENGINE_API_KEY;
   const apiUrl = process.env.VOLCENGINE_API_URL;
-  const model = process.env.VOLCENGINE_MODEL || "doubao-seed-1-6-vision-250815"; // 使用你自己的模型
+  const model = process.env.VOLCENGINE_MODEL || "doubao-seed-1-6-vision-250815";
 
   if (!apiKey || !apiUrl) {
     throw new Error("缺少 VOLCENGINE_API_KEY 或 VOLCENGINE_API_URL 配置");
