@@ -6,12 +6,27 @@
           <span class="logo-dot"></span>
           博客
         </NuxtLink>
+
         <nav class="nav-links">
+          <!-- 首页 永远显示 -->
           <NuxtLink to="/" class="nav-link">首页</NuxtLink>
-          <NuxtLink to="/admin/list" class="nav-link">后台管理</NuxtLink>
-          <NuxtLink to="/admin/new" class="nav-link nav-primary">
-            新建文章
-          </NuxtLink>
+
+          <template v-if="authUser">
+            <NuxtLink to="/admin/list" class="nav-link">后台管理</NuxtLink>
+            <NuxtLink to="/admin/new" class="nav-link nav-primary">
+              新建文章
+            </NuxtLink>
+            <span class="welcome">欢迎，{{ authUser.username }}</span>
+            <button class="nav-btn" @click="logout">退出</button>
+          </template>
+
+          <!-- ⭐ 未登录时：登录 + 注册 -->
+          <template v-else>
+            <NuxtLink to="/admin/login" class="nav-btn">登录</NuxtLink>
+            <NuxtLink to="/admin/register" class="nav-btn nav-btn-ghost"
+              >注册</NuxtLink
+            >
+          </template>
         </nav>
       </div>
     </header>
@@ -22,11 +37,26 @@
 
     <footer class="app-footer">
       <div class="app-footer-inner">
-        <span>博客</span>
+        <span>© 博客系统</span>
       </div>
     </footer>
   </div>
 </template>
+
+<script setup>
+const authUser = useAuthUser();
+
+// 退出登录方法
+const logout = async () => {
+  await $fetch("http://localhost:3001/api/auth/logout", {
+    method: "POST",
+    credentials: "include",
+  });
+
+  authUser.value = null;
+  navigateTo("/admin/login");
+};
+</script>
 
 <style>
 :root {
@@ -141,5 +171,49 @@ body {
   padding: 10px 24px 14px;
   font-size: 12px;
   color: #6b7280;
+}
+.nav-btn {
+  background: #38bdf8;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: none;
+  color: #0f172a;
+  font-weight: 500;
+  transition: 0.2s;
+}
+
+.nav-btn:hover {
+  background: #0ea5e9;
+}
+
+.welcome {
+  color: #e5e7eb;
+  font-size: 14px;
+  margin-right: 10px;
+}
+.nav-btn {
+  background: #38bdf8;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: none;
+  color: #0f172a;
+  font-weight: 500;
+  transition: 0.2s;
+}
+
+.nav-btn:hover {
+  background: #0ea5e9;
+}
+
+.nav-btn-ghost {
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  color: #e5e7eb;
+}
+
+.nav-btn-ghost:hover {
+  background: rgba(15, 23, 42, 0.4);
 }
 </style>

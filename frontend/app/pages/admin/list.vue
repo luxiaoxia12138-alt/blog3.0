@@ -134,7 +134,21 @@
 const config = useRuntimeConfig();
 const route = useRoute();
 const router = useRouter();
-
+const authUser = useAuthUser();
+if (process.client) {
+  // 如果内存中没有用户，尝试从后端获取
+  if (!authUser.value) {
+    try {
+      const res = await $fetch("http://localhost:3001/api/auth/me", {
+        credentials: "include",
+      });
+      authUser.value = res.user;
+    } catch (e) {
+      // 没登录 → 跳转到登录页
+      router.push("/admin/login");
+    }
+  }
+}
 // 当前页 & 排序，从 URL query 解析
 const page = computed(() => Number(route.query.page || 1));
 const sort = computed(() => route.query.sort || "time");
@@ -224,6 +238,7 @@ const handleDelete = async (id) => {
   try {
     await $fetch(`${config.public.apiBase}/posts/${id}`, {
       method: "DELETE",
+      credentials: "include",
     });
     message.value = `文章 ${id} 删除成功`;
     // 删除成功后刷新列表
@@ -252,6 +267,7 @@ const handleBatchDelete = async () => {
       body: {
         ids: selectedIds.value,
       },
+      credentials: "include",
     });
     message.value = `批量删除成功，共删除 ${selectedIds.value.length} 篇`;
     selectedIds.value = [];

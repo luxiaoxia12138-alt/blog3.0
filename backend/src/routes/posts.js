@@ -6,6 +6,7 @@ const router = express.Router();
 const db = require("../db");
 const crypto = require("crypto");
 const redisClient = require("../redisClient");
+const { auth, requireRole } = require("../middleware/auth");
 
 /**
  * 工具函数：确保用户存在，返回 userId
@@ -292,7 +293,7 @@ router.get("/:id", async (req, res) => {
 /**
  * 新增文章
  */
-router.post("/", async (req, res) => {
+router.post("/", auth(), requireRole("admin"), async (req, res) => {
   try {
     const { title, summary, content, tags, status, author } = req.body;
 
@@ -301,7 +302,9 @@ router.post("/", async (req, res) => {
     }
 
     // 确保用户存在
-    const authorId = await ensureUser(author || "匿名");
+    const authorName = (req.user && req.user.username) || author || "匿名";
+
+    const authorId = await ensureUser(authorName);
 
     // 插入文章（保留 author 文本字段可选，这里用 author_id 为主）
     const [result] = await db.query(
@@ -337,7 +340,7 @@ router.post("/", async (req, res) => {
 /**
  * 修改文章
  */
-router.put("/:id", async (req, res) => {
+router.put("/:id", auth(), requireRole("admin"), async (req, res) => {
   try {
     const id = req.params.id;
     const { title, summary, content, tags, status, author } = req.body;
@@ -346,7 +349,8 @@ router.put("/:id", async (req, res) => {
       return res.status(400).json({ message: "title 和 content 必填" });
     }
 
-    const authorId = await ensureUser(author || "匿名");
+    const authorName = (req.user && req.user.username) || author || "匿名";
+    const authorId = await ensureUser(authorName);
 
     const [result] = await db.query(
       `
@@ -383,7 +387,7 @@ router.put("/:id", async (req, res) => {
 /**
  * 单条删除（逻辑删除）
  */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", auth(), requireRole("admin"), async (req, res) => {
   try {
     const id = req.params.id;
 
@@ -412,7 +416,7 @@ router.delete("/:id", async (req, res) => {
 /**
  * 批量删除
  */
-router.delete("/", async (req, res) => {
+router.delete("/", auth(), requireRole("admin"), async (req, res) => {
   try {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
@@ -445,7 +449,7 @@ router.delete("/", async (req, res) => {
  * POST /api/posts/ai-generate
  * body: { title: string, keywords?: string }
  */
-router.post("/ai-generate", async (req, res) => {
+router.post("/ai-generate", auth(), async (req, res) => {
   try {
     const { title, keywords } = req.body;
 
