@@ -1,282 +1,306 @@
-# 📘 SSR 博客系统开发文档
+📘 SSR 博客系统开发文档
 
-项目名称：SSR Blog System  
-技术栈：Nuxt3 + Express + MySQL + Redis + 火山引擎 AI  
+项目名称：SSR Blog System
+技术栈：Nuxt3 + Express + MySQL + Redis + 火山引擎 AI
 作者：舒英杰
 
----
-
-## 一、项目概述
+一、项目概述
 
 本项目实现一个服务端渲染（SSR）博客系统，包括：
 
-- 前台文章列表页（SSR）
-- 前台文章详情页（SSR）
-- 后台文章管理（新建 / 列表 / 删除 / 批量删除）
-- AI 自动写作助手（火山引擎 + 本地降级）
-- 完整文章 CRUD API
-- MySQL 数据库（文章 / 用户 / 标签 / 多对多）
-- Redis 缓存优化（列表缓存 + 详情缓存）
-- HTTP 协商缓存（ETag）
-- SSR 降级策略（服务端失败 → 客户端重试）
+前台文章列表页（SSR）
+
+前台文章详情页（SSR）
+
+用户系统（注册 / 登录 / 鉴权）
+
+后台文章管理（新建 / 编辑 / 列表 / 删除 / 批量删除）
+
+AI 自动写作助手（火山引擎 + 本地降级）
+
+完整文章 CRUD API
+
+MySQL 数据库（文章 / 用户 / 标签 / 多对多）
+
+Redis 缓存优化（列表缓存 + 详情缓存）
+
+HTTP 协商缓存（ETag）
+
+SSR 降级策略（服务端失败 → 客户端重试）
 
 项目覆盖前后端全栈能力，是学习 SSR、高性能架构的优秀实践案例。
 
----
+二、技术栈
+前端（SSR）
 
-## 二、技术栈
+Nuxt 3（Vue 3）
 
-### 前端（SSR）
-- Nuxt 3（Vue 3）
-- SSR + Hydration
-- useAsyncData 服务端数据获取
-- Tailwind 风格 CSS
+SSR + Hydration
 
-### 后端
-- Express
-- RESTful API
+useAsyncData 服务端数据获取
 
-### 数据库
-- MySQL（四表结构：users / posts / tags / article_tags）
+Tailwind 风格 CSS
 
-### 缓存
-- Redis（列表缓存、详情缓存、缓存失效机制）
+自定义错误处理（client/server 插件）
 
-### AI
-- 火山引擎 Ark ChatCompletion API
-- 本地伪 AI 自动降级
+后端
 
----
+Express
 
-## 三、项目结构
+RESTful API
 
-```
+JWT 用户认证
+
+鉴权中间件（保护后台接口）
+
+数据库
+
+MySQL（四张表：users / posts / tags / article_tags）
+
+缓存
+
+Redis（列表缓存 + 详情缓存 + 缓存清除）
+
+AI（可选）
+
+火山引擎 Ark ChatCompletion API
+
+本地备选降级（避免网络失败）
+
+三、项目结构
 BLOG/
 ├── backend/
 │   ├── src/
-│   │   ├── server.js           # Express 入口
-│   │   ├── db.js               # MySQL 连接
-│   │   ├── redisClient.js      # Redis 客户端
-│   │   ├── aiWriter.js         # AI 写作助手
+│   │   ├── server.js              # Express 主入口
+│   │   ├── db.js                  # MySQL 连接池
+│   │   ├── redisClient.js         # Redis 客户端
+│   │   ├── aiWriter.js            # AI 写作助手
+│   │   ├── middleware/
+│   │   │     └── auth.js          # JWT 鉴权中间件
 │   │   └── routes/
-│   │       └── posts.js        # 文章 API
-│   ├── .env                    # 环境变量配置
-│   └── package.json
+│   │         ├── auth.js          # 登录 / 注册
+│   │         └── posts.js         # 文章 CRUD
+│   └── .env
 │
 └── frontend/
-    ├── app.vue                 # 应用顶层布局
-    ├── nuxt.config.ts          # Nuxt 配置
-    └── app/pages/
-         ├── index.vue          # SSR 首页文章列表
-         ├── posts/[id].vue     # SSR 查看文章详情
-         └── admin/
-             ├── new.vue        # 新建文章（含 AI）
-             └── list.vue       # 后台文章管理
-```
+    ├── app.vue                     # Nuxt 主组件
+    ├── nuxt.config.ts              # Nuxt 配置
+    ├── app/composables/
+    │       └── useAuthUser.ts      # 前端登录态管理
+    ├── app/pages/
+    │       ├── index.vue           # SSR 首页
+    │       ├── posts/[id].vue      # 文章详情页（SSR）
+    │       └── admin/
+    │             ├── login.vue     # 登录页
+    │             ├── register.vue  # 注册页
+    │             ├── new.vue       # 新建文章（AI 写作）
+    │             ├── list.vue      # 后台文章管理
+    │             └── edit/[id].vue # 编辑文章
+    ├── plugins/
+    │       ├── fetch-error-handle.client.js
+    │       └── fetch-error-handle.server.js
+    └── public/
 
----
+四、核心功能说明
+1. 用户系统（注册 / 登录 / 鉴权）
 
-## 四、核心功能
+注册：POST /api/auth/register
 
-### 1. 文章列表页（SSR）
-- 服务端渲染文章列表，提高首屏速度
-- 支持分页 / 排序 / 标签筛选
-- SSR 失败 → 客户端自动重试（降级）
+登录：POST /api/auth/login
 
-### 2. 文章详情页（SSR）
-- 展示全文、作者、标签、阅读量等
-- 阅读量自动 +1（Redis 命中时异步更新）
-- 标签可点击跳转列表页筛选
+密码加密（bcrypt）
 
-### 3. 后台管理（CRUD）
-- **新建文章**（支持 AI 自动生成摘要 + 正文草稿）
-- 管理列表（展示作者 / 状态 / 标签 / 阅读量）
-- 单删 / 批量删除（逻辑删除）
+JWT 登录态（后端认证 + 前端持久化）
 
-### 4. AI 写作助手
-- 输入标题与关键词 → 自动生成草稿
-- 主调火山引擎 API
+登录后自动带上 Authorization 头
 
-### 5. 缓存系统
-- Redis 列表缓存：60 秒  
-- Redis 详情缓存：30 秒  
-- 写操作后自动 FLUSHALL
+未登录无法访问后台接口
 
-### 6. HTTP 协商缓存（ETag）
-- 列表接口支持 ETag
-- If-None-Match → 304 节省带宽
+2. 前台文章功能（SSR）
+文章列表（SSR）
 
----
+服务端渲染，提高 SEO
 
-## 五、数据库设计
+排序（按时间 / 阅读量）
 
-### users 表
-| 字段 | 类型 |
-|------|------|
-| id | INT |
-| username | VARCHAR |
-| nickname | VARCHAR |
-| created_at | TIMESTAMP |
+标签筛选
 
-### posts 表
-| 字段 | 类型 |
-|------|------|
-| id | INT |
-| title | VARCHAR |
-| author_id | INT |
-| summary | TEXT |
-| content | LONGTEXT |
-| tags | VARCHAR |
-| status | ENUM('published','draft') |
-| view_count | INT |
-| is_deleted | TINYINT |
-| created_at | TIMESTAMP |
-| updated_at | TIMESTAMP |
+分页
 
-### tags 表
-| 字段 | 类型 |
-|------|------|
-| id | INT |
-| name | VARCHAR UNIQUE |
+SSR 失败自动降级为客户端加载
 
-### article_tags 表（多对多）
-| 字段 | 类型 |
-|------|------|
-| article_id | INT |
-| tag_id | INT |
+文章详情（SSR）
 
----
+阅读量自动 +1（Redis）
 
-## 六、后端 API 文档
+支持标签点击跳转
 
-### 获取文章列表
-GET `/api/posts`
+详情缓存（30 秒）
 
-参数：
+3. 后台文章管理
 
-| 参数 | 说明 |
-|------|------|
-| page | 页码 |
-| pageSize | 每页数量 |
-| tag | 标签筛选 |
-| sort | time / views |
+新建文章（支持 AI 自动生成内容）
 
-特点：Redis 缓存 + ETag（304）
+编辑文章（标题 / 摘要 / 标签 / 正文 / 状态）
 
----
+删除文章
 
-### 获取文章详情  
-GET `/api/posts/:id`
+批量删除文章
 
-特点：
-- 阅读量自动 +1  
-- Redis 命中时异步更新  
+列表分页 / 排序
 
----
+4. AI 自动写作助手
 
-### 新增文章  
-POST `/api/posts`
+输入：
 
-示例：
-
-```json
-{
-  "title": "标题",
-  "author": "作者名",
-  "summary": "摘要内容",
-  "content": "正文内容",
-  "tags": "Vue,SSR",
-  "status": "published"
-}
-```
-
----
-
-### 修改文章  
-PUT `/api/posts/:id`
-
-字段同新增。
-
----
-
-### 删除文章  
-DELETE `/api/posts/:id`
-
----
-
-### 批量删除  
-DELETE `/api/posts`
-
-```json
-{ "ids": [1,2,3] }
-```
-
----
-
-### AI 自动生成文章  
-POST `/api/posts/ai-generate`
-
-```json
 {
   "title": "SSR 博客系统设计",
-  "keywords": "Nuxt,Express,Redis"
+  "keywords": "Nuxt3,Redis,Express"
 }
-```
+
 
 返回：
 
-```json
+自动摘要 summary
+
+自动正文 content
+
+AI 调用失败时自动降级到本地生成。
+
+5. Redis 缓存策略
+内容	描述	TTL
+列表缓存	分页 + 标签 + 排序	60s
+详情缓存	单篇文章缓存	30s
+增删改文章	自动清空缓存	-
+6. HTTP 协商缓存（ETag）
+
+内容无变化 → 返回 304
+
+大幅减少服务端压力
+
+五、数据库结构设计
+users 表
+字段	类型	说明
+id	INT	主键
+username	VARCHAR	登录名
+password	VARCHAR	加密密码
+nickname	VARCHAR	昵称
+created_at	TIMESTAMP	创建时间
+posts 表
+字段	类型
+id	INT
+title	VARCHAR
+author_id	INT
+summary	TEXT
+content	LONGTEXT
+tags	VARCHAR
+status	ENUM('published','draft')
+view_count	INT
+is_deleted	TINYINT
+created_at	TIMESTAMP
+updated_at	TIMESTAMP
+tags / article_tags（多对多）
+六、API 文档（简要）
+用户
+注册
+
+POST /api/auth/register
+
+登录
+
+POST /api/auth/login
+
+返回：
+
 {
-  "summary": "...",
-  "content": "..."
+  "token": "JWT_VALUE",
+  "user": { "id": 1, "username": "test" }
 }
-```
 
----
+文章
+获取文章列表
 
-## 七、系统流程（架构说明）
+GET /api/posts
 
-### SSR 渲染流程
+获取详情
 
-```
-浏览器请求页面
-→ Nuxt SSR useAsyncData 调后端 API
-→ Redis 查询（命中则返回）
-→ 否则查询 MySQL
-→ 服务端渲染 HTML
-→ 浏览器接收并 Hydration 激活交互
-```
+GET /api/posts/:id
 
-### 缓存策略
+新建文章
 
-| 模块 | 类型 | TTL |
-|------|------|------|
-| 列表页 | Redis + ETag | 60 秒 |
-| 详情页 | Redis | 30 秒 |
-| 写操作 | 自动 FLUSHALL | - |
+POST /api/posts
 
----
+编辑文章
 
-## 八、运行与构建
+PUT /api/posts/:id
 
-### 安装依赖
-```bash
-npm install
-```
+删除文章
 
-### 启动后端
-```bash
+DELETE /api/posts/:id
+
+批量删除
+
+DELETE /api/posts
+
+AI 自动生成
+
+POST /api/posts/ai-generate
+
+七、运行方式
+1. 启动后端
 cd backend
+npm install
 npm run dev
-```
-访问地址：`http://localhost:3001`
 
-### 启动前端
-```bash
+
+访问地址 → http://localhost:3001
+
+2. 启动前端
 cd frontend
+npm install
 npm run dev
-```
-访问地址：`http://localhost:3000`
 
----
 
+访问地址 → http://localhost:3000
+
+八、环境变量模板（backend/.env）
+MYSQL_HOST=localhost
+MYSQL_USER=root
+MYSQL_PASSWORD=123456
+MYSQL_DB=ssr_blog
+
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+
+JWT_SECRET=your_jwt_secret
+
+AI_API_KEY=xxx
+AI_ENDPOINT=https://ark.cn-beijing.volces.com/api/v3/chat
+
+九、未来扩展方向
+
+Markdown 编辑器
+
+图片上传（OSS）
+
+评论系统
+
+用户角色权限
+
+Docker 一键部署
+
+十、总结
+
+本项目实现：
+
+SSR 渲染
+
+用户认证系统
+
+完整文章 CRUD
+
+Redis 缓存
+
+AI 写作助手
+
+后台管理系统
